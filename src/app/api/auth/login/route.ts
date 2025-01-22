@@ -2,15 +2,17 @@ import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { connectToDatabase } from '@/lib/db';
-import { User } from '@/types';
+import User from '@/models/User';
 
 export async function POST(request: Request) {
   try {
     const { email, password } = await request.json();
-    const mongoose = await connectToDatabase();
+
+    await connectToDatabase();
 
     // Find user by email
-    const user = await mongoose.connection.db.collection('users').findOne({ email });
+    const user = await User.findOne({ email }).select('+password');
+    
     if (!user) {
       return NextResponse.json(
         { error: 'Invalid credentials' },
@@ -18,24 +20,24 @@ export async function POST(request: Request) {
       );
     }
 
-    // Verify password
-    const isValidPassword = await bcrypt.compare(password, user.password);
-    if (!isValidPassword) {
+    // Check password
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
       return NextResponse.json(
         { error: 'Invalid credentials' },
         { status: 401 }
       );
     }
 
-    // Create JWT token
+    // Generate JWT token
     const token = jwt.sign(
-      { userId: user._id },
+      { userId: user._id.toString() },
       process.env.JWT_SECRET || 'your-secret-key',
       { expiresIn: '7d' }
     );
-
+    
     // Remove password from user object
-    const { password: _, ...userWithoutPassword } = user;
+    const { password: _, ...userWithoutPassword } = user.toObject();
 
     return NextResponse.json({
       user: userWithoutPassword,
@@ -44,7 +46,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('Login error:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'An error occurred during login' },
       { status: 500 }
     );
   }
