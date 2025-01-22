@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
+import Product from '@/models/Product';
 
 export async function GET() {
   try {
-    const db = await connectToDatabase();
-    const products = await db.collection('products')
-      .find({})
-      .toArray();
+    await connectToDatabase();
+    const products = await Product.find({}).exec();
 
     // If no products are found, return an empty array
     if (!products) {
@@ -25,22 +24,15 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const product = await request.json();
-    const db = await connectToDatabase();
+    const productData = await request.json();
+    await connectToDatabase();
 
-    const result = await db.collection('products').insertOne({
-      ...product,
-      createdAt: new Date(),
-    });
-
-    return NextResponse.json({
-      message: 'Product added successfully',
-      productId: result.insertedId,
-    });
+    const product = await Product.create(productData);
+    return NextResponse.json(product, { status: 201 });
   } catch (error) {
-    console.error('Error adding product:', error);
+    console.error('Error creating product:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Error creating product' },
       { status: 500 }
     );
   }

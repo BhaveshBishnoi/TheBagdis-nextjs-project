@@ -1,14 +1,15 @@
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { connectToDatabase } from '@/lib/db';
+import User from '@/models/User';
 
 export async function POST(request: Request) {
   try {
     const { name, email, password } = await request.json();
-    const db = await connectToDatabase();
+    await connectToDatabase();
 
     // Check if user already exists
-    const existingUser = await db.collection('users').findOne({ email });
+    const existingUser = await User.findOne({ email });
     if (existingUser) {
       return NextResponse.json(
         { error: 'Email already registered' },
@@ -21,22 +22,23 @@ export async function POST(request: Request) {
     const hashedPassword = await bcrypt.hash(password, salt);
 
     // Create new user
-    const result = await db.collection('users').insertOne({
+    const user = await User.create({
       name,
       email,
-      password: hashedPassword,
-      role: 'user',
-      createdAt: new Date(),
+      password: hashedPassword
     });
 
-    return NextResponse.json({
-      message: 'User registered successfully',
-      userId: result.insertedId,
-    });
+    // Remove password from response
+    const { password: _, ...userWithoutPassword } = user.toJSON();
+
+    return NextResponse.json(
+      { message: 'User registered successfully', user: userWithoutPassword },
+      { status: 201 }
+    );
   } catch (error) {
     console.error('Registration error:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Error registering user' },
       { status: 500 }
     );
   }
