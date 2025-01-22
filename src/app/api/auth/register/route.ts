@@ -39,6 +39,7 @@ export async function POST(request: Request) {
       );
     }
 
+    // Connect to database
     await connectToDatabase();
 
     // Check if user already exists

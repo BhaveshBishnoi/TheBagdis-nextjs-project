@@ -32,14 +32,13 @@ if (!globalWithMongoose.mongoose) {
   globalWithMongoose.mongoose = { conn: null, promise: null };
 }
 
-const cached = globalWithMongoose.mongoose;
 
-async function connectToDatabase() {
-  if (cached.conn) {
-    return cached.conn;
-  }
+export async function connectToDatabase(): Promise<void> {
+  try {
+    if (mongoose.connection.readyState >= 1) {
+      return;
+    }
 
-  if (!cached.promise) {
     const opts = {
       bufferCommands: true,
       dbName: 'thebagdisdb',
@@ -49,39 +48,23 @@ async function connectToDatabase() {
       family: 4, // IPv4 only
     };
 
-    mongoose.set('strictQuery', true);
-
-    cached.promise = mongoose
-      .connect(MONGODB_URI, opts)
-      .then((mongoose) => {
-        console.log('Connected to MongoDB');
-        return mongoose;
-      })
-      .catch((error) => {
-        console.error('Error connecting to MongoDB:', error);
-        throw error;
-      });
-  }
-
-  try {
-    cached.conn = await cached.promise;
+    await mongoose.connect(MONGODB_URI, opts);
   } catch (error) {
-    cached.promise = null;
-    console.error('Failed to connect to MongoDB:', error);
+    console.error('MongoDB connection error:', error);
     throw error;
   }
-
-  return cached.conn;
 }
 
 // Graceful shutdown
 process.on('SIGTERM', async () => {
-  if (cached.conn) {
+  try {
     await mongoose.disconnect();
     console.log('MongoDB connection closed');
     process.exit(0);
+  } catch (error) {
+    console.error('Error during shutdown:', error);
+    process.exit(1);
   }
 });
 
-export { connectToDatabase };
 export default connectToDatabase;
