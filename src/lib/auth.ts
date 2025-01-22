@@ -41,7 +41,7 @@ export class Auth {
       }
 
       // Remove sensitive data
-      const { password:userWithoutPassword } = user.toJSON();
+      const { password, ...userWithoutPassword } = user.toJSON();
       return userWithoutPassword;
     } catch {
       return null;

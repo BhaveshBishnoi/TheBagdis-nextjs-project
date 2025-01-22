@@ -42,7 +42,7 @@ async function connectToDatabase() {
   if (!cached.promise) {
     const opts = {
       bufferCommands: true,
-      dbName: 'bagdi-web',
+      dbName: 'thebagdisdb',
       maxPoolSize: 10,
       serverSelectionTimeoutMS: 5000,
       socketTimeoutMS: 45000,
