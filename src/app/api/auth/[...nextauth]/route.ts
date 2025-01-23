@@ -15,17 +15,47 @@ export async function POST(request: NextRequest) {
     // 3. Verify password
     // 4. Generate JWT token
     
-    // Mock user for demonstration
-    const user = {
-      id: '1',
-      name: 'Test User',
-      email: email,
-      role: 'user'
-    };
+    // Mock users for demonstration
+    // In a real application, you would fetch this from your database
+    const users = [
+      {
+        id: '1',
+        name: 'Admin User',
+        email: 'admin@example.com',
+        password: '$2a$10$GQH2YH8jK8I2JZ1Q9Q9Y9O9Q9Q9Q9Q9Q9Q9Q9Q9Q9Q9Q9Q9Q',
+        role: 'admin'
+      },
+      {
+        id: '2',
+        name: 'Normal User',
+        email: 'user@example.com',
+        password: '$2a$10$GQH2YH8jK8I2JZ1Q9Q9Y9O9Q9Q9Q9Q9Q9Q9Q9Q9Q9Q9Q9Q9Q',
+        role: 'user'
+      }
+    ];
 
-    const token = sign({ userId: user.id }, JWT_SECRET, { expiresIn: '1d' });
+    const user = users.find(u => u.email === email);
+    
+    if (!user) {
+      return NextResponse.json({ message: 'User not found' }, { status: 404 });
+    }
 
-    return NextResponse.json({ user, token }, { status: 200 });
+    // In a real application, you would verify the password using bcrypt
+    // const isValidPassword = await bcrypt.compare(password, user.password);
+    // For demo, we'll skip password verification
+    
+    const token = sign({ 
+      userId: user.id,
+      role: user.role 
+    }, JWT_SECRET, { expiresIn: '1d' });
+
+    // Remove password from user object before sending
+    const { password: _, ...userWithoutPassword } = user;
+
+    return NextResponse.json({ 
+      user: userWithoutPassword,
+      token 
+    }, { status: 200 });
   } catch (error) {
     return NextResponse.json(
       { message: 'Authentication failed' },

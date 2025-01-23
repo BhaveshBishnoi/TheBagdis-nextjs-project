@@ -6,6 +6,10 @@ import { jwtVerify } from 'jose';
 const protectedPaths = [
   '/profile',
   '/orders',
+];
+
+// Add paths that require admin role
+const adminPaths = [
   '/admin',
 ];
 
@@ -14,23 +18,43 @@ const authPaths = [
   '/login',
 ];
 
+interface JWTPayload {
+  role?: string;
+}
+
 export async function middleware(request: NextRequest) {
   const token = request.cookies.get('auth_token')?.value;
   
   let isAuthenticated = false;
+  let userRole = '';
+  
   if (token) {
     try {
       const secret = new TextEncoder().encode(
         process.env.JWT_SECRET || 'your-secret-key'
       );
-      await jwtVerify(token, secret);
+      const { payload } = await jwtVerify(token, secret);
       isAuthenticated = true;
+      userRole = (payload as JWTPayload).role || '';
     } catch {
       isAuthenticated = false;
     }
   }
 
   const path = request.nextUrl.pathname;
+
+  // Check if the path requires admin role
+  if (adminPaths.some(p => path.startsWith(p))) {
+    if (!isAuthenticated) {
+      const redirectUrl = new URL('/login', request.url);
+      redirectUrl.searchParams.set('from', path);
+      return NextResponse.redirect(redirectUrl);
+    }
+    
+    if (userRole !== 'admin') {
+      return NextResponse.redirect(new URL('/', request.url));
+    }
+  }
 
   // Check if the path is protected and user is not authenticated
   if (protectedPaths.some(p => path.startsWith(p)) && !isAuthenticated) {
@@ -49,14 +73,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - api (API routes)
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public folder
-     */
     '/((?!api|_next/static|_next/image|favicon.ico|public).*)',
   ],
 };

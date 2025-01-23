@@ -1,11 +1,11 @@
 'use client';
 
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
-import { User, Cart } from '@/types';
+import { User, CartItem } from '@/types';
 
 interface AppState {
   user: User | null;
-  cart: Cart;
+  cart: CartItem[];
   isLoading: boolean;
   isAuthenticated: boolean;
 }
@@ -13,32 +13,29 @@ interface AppState {
 interface AppContextType extends AppState {
   login: (userData: User) => void;
   logout: () => void;
-  addToCart: (productId: string, quantity: number) => void;
+  addToCart: (item: CartItem) => void;
   removeFromCart: (productId: string) => void;
-  updateCartQuantity: (productId: string, quantity: number) => void;
+  updateQuantity: (productId: string, quantity: number) => void;
   clearCart: () => void;
 }
-
-const initialState: AppState = {
-  user: null,
-  cart: {
-    items: [],
-    totalAmount: 0,
-  },
-  isLoading: true,
-  isAuthenticated: false,
-};
 
 type Action =
   | { type: 'SET_USER'; payload: User }
   | { type: 'CLEAR_USER' }
   | { type: 'SET_LOADING'; payload: boolean }
-  | { type: 'ADD_TO_CART'; payload: { productId: string; quantity: number } }
+  | { type: 'ADD_TO_CART'; payload: CartItem }
   | { type: 'REMOVE_FROM_CART'; payload: string }
-  | { type: 'UPDATE_CART_QUANTITY'; payload: { productId: string; quantity: number } }
+  | { type: 'UPDATE_QUANTITY'; payload: { productId: string; quantity: number } }
   | { type: 'CLEAR_CART' };
 
-const appReducer = (state: AppState, action: Action): AppState => {
+const initialState: AppState = {
+  user: null,
+  cart: [],
+  isLoading: false,
+  isAuthenticated: false,
+};
+
+function appReducer(state: AppState, action: Action): AppState {
   switch (action.type) {
     case 'SET_USER':
       return {
@@ -52,91 +49,104 @@ const appReducer = (state: AppState, action: Action): AppState => {
         ...state,
         user: null,
         isAuthenticated: false,
-        isLoading: false,
       };
     case 'SET_LOADING':
       return {
         ...state,
         isLoading: action.payload,
       };
-    // Cart actions will be implemented here
+    case 'ADD_TO_CART':
+      const existingItem = state.cart.find(
+        item => item.productId === action.payload.productId
+      );
+      if (existingItem) {
+        return {
+          ...state,
+          cart: state.cart.map(item =>
+            item.productId === action.payload.productId
+              ? { ...item, quantity: item.quantity + 1 }
+              : item
+          ),
+        };
+      }
+      return {
+        ...state,
+        cart: [...state.cart, action.payload],
+      };
+    case 'REMOVE_FROM_CART':
+      return {
+        ...state,
+        cart: state.cart.filter(item => item.productId !== action.payload),
+      };
+    case 'UPDATE_QUANTITY':
+      return {
+        ...state,
+        cart: state.cart.map(item =>
+          item.productId === action.payload.productId
+            ? { ...item, quantity: action.payload.quantity }
+            : item
+        ),
+      };
+    case 'CLEAR_CART':
+      return {
+        ...state,
+        cart: [],
+      };
     default:
       return state;
   }
-};
+}
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export function AppProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(appReducer, initialState);
-
-  useEffect(() => {
-    // Check for stored auth token and validate
-    const checkAuth = async () => {
-      try {
-        const token = localStorage.getItem('auth_token');
-        if (token) {
-          // Validate token and get user data
-          // const userData = await validateToken(token);
-          // dispatch({ type: 'SET_USER', payload: userData });
-        }
-      } catch (error) {
-        console.error('Auth error:', error);
-        localStorage.removeItem('auth_token');
-      } finally {
-        dispatch({ type: 'SET_LOADING', payload: false });
-      }
-    };
-
-    checkAuth();
-  }, []);
 
   const login = (userData: User) => {
     dispatch({ type: 'SET_USER', payload: userData });
   };
 
   const logout = () => {
-    localStorage.removeItem('auth_token');
     dispatch({ type: 'CLEAR_USER' });
+    dispatch({ type: 'CLEAR_CART' });
   };
 
-  const addToCart = (productId: string, quantity: number) => {
-    dispatch({ type: 'ADD_TO_CART', payload: { productId, quantity } });
+  const addToCart = (item: CartItem) => {
+    dispatch({ type: 'ADD_TO_CART', payload: item });
   };
 
   const removeFromCart = (productId: string) => {
     dispatch({ type: 'REMOVE_FROM_CART', payload: productId });
   };
 
-  const updateCartQuantity = (productId: string, quantity: number) => {
-    dispatch({ type: 'UPDATE_CART_QUANTITY', payload: { productId, quantity } });
+  const updateQuantity = (productId: string, quantity: number) => {
+    dispatch({
+      type: 'UPDATE_QUANTITY',
+      payload: { productId, quantity },
+    });
   };
 
   const clearCart = () => {
     dispatch({ type: 'CLEAR_CART' });
   };
 
-  return (
-    <AppContext.Provider
-      value={{
-        ...state,
-        login,
-        logout,
-        addToCart,
-        removeFromCart,
-        updateCartQuantity,
-        clearCart,
-      }}
-    >
-      {children}
-    </AppContext.Provider>
-  );
-};
+  const value = {
+    ...state,
+    login,
+    logout,
+    addToCart,
+    removeFromCart,
+    updateQuantity,
+    clearCart,
+  };
 
-export const useApp = () => {
+  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
+}
+
+export function useApp() {
   const context = useContext(AppContext);
   if (context === undefined) {
     throw new Error('useApp must be used within an AppProvider');
   }
   return context;
-};
+}
