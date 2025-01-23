@@ -13,10 +13,15 @@ export interface Product {
   description: string;
   price: number;
   images: string[];
-  category: string;
+  category: 'ghee' | 'honey' | 'spices' | 'oils' | 'other';
   stock: number;
   featured: boolean;
   reviews: Review[];
+  averageRating: number;
+  numReviews: number;
+  specifications: Record<string, string>;
+  weight: number;
+  weightUnit: 'g' | 'kg' | 'ml' | 'l';
   createdAt: Date;
   updatedAt: Date;
 }

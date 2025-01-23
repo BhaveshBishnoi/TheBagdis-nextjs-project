@@ -2,12 +2,14 @@
 
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import { User, CartItem } from '@/types';
+import toast from 'react-hot-toast';
 
 interface AppState {
   user: User | null;
   cart: CartItem[];
   isLoading: boolean;
   isAuthenticated: boolean;
+  cartOpen: boolean;
 }
 
 interface AppContextType extends AppState {
@@ -17,6 +19,7 @@ interface AppContextType extends AppState {
   removeFromCart: (productId: string) => void;
   updateQuantity: (productId: string, quantity: number) => void;
   clearCart: () => void;
+  toggleCart: () => void;
 }
 
 type Action =
@@ -26,13 +29,15 @@ type Action =
   | { type: 'ADD_TO_CART'; payload: CartItem }
   | { type: 'REMOVE_FROM_CART'; payload: string }
   | { type: 'UPDATE_QUANTITY'; payload: { productId: string; quantity: number } }
-  | { type: 'CLEAR_CART' };
+  | { type: 'CLEAR_CART' }
+  | { type: 'TOGGLE_CART' };
 
 const initialState: AppState = {
   user: null,
   cart: [],
   isLoading: false,
   isAuthenticated: false,
+  cartOpen: false,
 };
 
 function appReducer(state: AppState, action: Action): AppState {
@@ -56,17 +61,43 @@ function appReducer(state: AppState, action: Action): AppState {
         isLoading: action.payload,
       };
     case 'ADD_TO_CART': {
-      const existingItemIndex = state.cart.findIndex(
-        item => item.productId === action.payload.productId
-      );
+      try {
+        const existingItemIndex = state.cart.findIndex(
+          item => item.productId === action.payload.productId
+        );
 
-      if (existingItemIndex > -1) {
-        // Item exists, update quantity
-        const updatedCart = [...state.cart];
-        updatedCart[existingItemIndex] = {
-          ...updatedCart[existingItemIndex],
-          quantity: updatedCart[existingItemIndex].quantity + 1
+        let updatedCart;
+        if (existingItemIndex > -1) {
+          // Item exists, update quantity
+          updatedCart = [...state.cart];
+          updatedCart[existingItemIndex] = {
+            ...updatedCart[existingItemIndex],
+            quantity: updatedCart[existingItemIndex].quantity + 1
+          };
+        } else {
+          // Item doesn't exist, add new item
+          updatedCart = [...state.cart, { ...action.payload, quantity: 1 }];
+        }
+        
+        // Save to localStorage
+        localStorage.setItem('cart', JSON.stringify(updatedCart));
+        
+        return {
+          ...state,
+          cart: updatedCart,
+          cartOpen: true, // Open cart when adding item
         };
+      } catch (error) {
+        console.error('Error adding to cart:', error);
+        toast.error('Failed to add item to cart');
+        return state;
+      }
+    }
+    case 'REMOVE_FROM_CART': {
+      try {
+        const updatedCart = state.cart.filter(
+          item => item.productId !== action.payload
+        );
         
         // Save to localStorage
         localStorage.setItem('cart', JSON.stringify(updatedCart));
@@ -75,54 +106,52 @@ function appReducer(state: AppState, action: Action): AppState {
           ...state,
           cart: updatedCart,
         };
+      } catch (error) {
+        console.error('Error removing from cart:', error);
+        toast.error('Failed to remove item from cart');
+        return state;
       }
-
-      // Item doesn't exist, add new item
-      const updatedCart = [...state.cart, { ...action.payload, quantity: 1 }];
-      
-      // Save to localStorage
-      localStorage.setItem('cart', JSON.stringify(updatedCart));
-      
-      return {
-        ...state,
-        cart: updatedCart,
-      };
-    }
-    case 'REMOVE_FROM_CART': {
-      const updatedCart = state.cart.filter(
-        item => item.productId !== action.payload
-      );
-      
-      // Save to localStorage
-      localStorage.setItem('cart', JSON.stringify(updatedCart));
-      
-      return {
-        ...state,
-        cart: updatedCart,
-      };
     }
     case 'UPDATE_QUANTITY': {
-      const updatedCart = state.cart.map(item =>
-        item.productId === action.payload.productId
-          ? { ...item, quantity: action.payload.quantity }
-          : item
-      );
-      
-      // Save to localStorage
-      localStorage.setItem('cart', JSON.stringify(updatedCart));
-      
-      return {
-        ...state,
-        cart: updatedCart,
-      };
+      try {
+        const updatedCart = state.cart.map(item =>
+          item.productId === action.payload.productId
+            ? { ...item, quantity: action.payload.quantity }
+            : item
+        );
+        
+        // Save to localStorage
+        localStorage.setItem('cart', JSON.stringify(updatedCart));
+        
+        return {
+          ...state,
+          cart: updatedCart,
+        };
+      } catch (error) {
+        console.error('Error updating quantity:', error);
+        toast.error('Failed to update quantity');
+        return state;
+      }
     }
     case 'CLEAR_CART':
-      // Clear cart from localStorage
-      localStorage.removeItem('cart');
-      
+      try {
+        // Clear cart from localStorage
+        localStorage.removeItem('cart');
+        
+        return {
+          ...state,
+          cart: [],
+          cartOpen: false,
+        };
+      } catch (error) {
+        console.error('Error clearing cart:', error);
+        toast.error('Failed to clear cart');
+        return state;
+      }
+    case 'TOGGLE_CART':
       return {
         ...state,
-        cart: [],
+        cartOpen: !state.cartOpen,
       };
     default:
       return state;
@@ -167,11 +196,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           } catch (error) {
             console.error('Error loading cart data:', error);
             localStorage.removeItem('cart');
+            toast.error('Failed to load cart data');
           }
         }
       } catch (error) {
         console.error('Auth check error:', error);
         localStorage.removeItem('user');
+        toast.error('Authentication error');
       }
     };
 
@@ -179,12 +210,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = (userData: User) => {
-    // Ensure role is included in userData
-    if (!userData.role) {
-      console.error('User role not provided');
-      return;
+    try {
+      // Ensure role is included in userData
+      if (!userData.role) {
+        throw new Error('User role not provided');
+      }
+      dispatch({ type: 'SET_USER', payload: userData });
+    } catch (error) {
+      console.error('Login error:', error);
+      toast.error('Failed to log in');
     }
-    dispatch({ type: 'SET_USER', payload: userData });
   };
 
   const logout = async () => {
@@ -202,28 +237,58 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       // Clear app state
       dispatch({ type: 'CLEAR_USER' });
       dispatch({ type: 'CLEAR_CART' });
+      
+      toast.success('Logged out successfully');
     } catch (error) {
       console.error('Logout error:', error);
+      toast.error('Failed to log out');
     }
   };
 
   const addToCart = (item: CartItem) => {
-    dispatch({ type: 'ADD_TO_CART', payload: item });
+    try {
+      dispatch({ type: 'ADD_TO_CART', payload: item });
+      toast.success('Added to cart');
+    } catch (error) {
+      console.error('Add to cart error:', error);
+      toast.error('Failed to add to cart');
+    }
   };
 
   const removeFromCart = (productId: string) => {
-    dispatch({ type: 'REMOVE_FROM_CART', payload: productId });
+    try {
+      dispatch({ type: 'REMOVE_FROM_CART', payload: productId });
+      toast.success('Removed from cart');
+    } catch (error) {
+      console.error('Remove from cart error:', error);
+      toast.error('Failed to remove from cart');
+    }
   };
 
   const updateQuantity = (productId: string, quantity: number) => {
-    dispatch({
-      type: 'UPDATE_QUANTITY',
-      payload: { productId, quantity },
-    });
+    try {
+      dispatch({
+        type: 'UPDATE_QUANTITY',
+        payload: { productId, quantity },
+      });
+    } catch (error) {
+      console.error('Update quantity error:', error);
+      toast.error('Failed to update quantity');
+    }
   };
 
   const clearCart = () => {
-    dispatch({ type: 'CLEAR_CART' });
+    try {
+      dispatch({ type: 'CLEAR_CART' });
+      toast.success('Cart cleared');
+    } catch (error) {
+      console.error('Clear cart error:', error);
+      toast.error('Failed to clear cart');
+    }
+  };
+
+  const toggleCart = () => {
+    dispatch({ type: 'TOGGLE_CART' });
   };
 
   const value = {
@@ -234,6 +299,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     removeFromCart,
     updateQuantity,
     clearCart,
+    toggleCart,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
