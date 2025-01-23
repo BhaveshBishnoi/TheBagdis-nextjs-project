@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useApp } from '@/contexts/AppContext';
-import { UserIcon } from '@heroicons/react/outline';
+import { UserIcon } from '@heroicons/react/24/outline';
 
 export default function UserMenu() {
   const [isOpen, setIsOpen] = useState(false);

@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { useApp } from '@/contexts/AppContext';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Mail, Lock, Eye, EyeOff } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, User } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 export default function LoginPage() {
@@ -14,7 +14,7 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const { login } = useApp();
   const router = useRouter();
-  const { register, handleSubmit, formState: { errors } } = useForm();
+  const { register, handleSubmit, reset, formState: { errors } } = useForm();
 
   useEffect(() => {
     // Check if user is already logged in
@@ -41,31 +41,59 @@ export default function LoginPage() {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify(data),
+          credentials: 'include', // Important for cookies
         });
 
         const result = await response.json();
 
         if (response.ok) {
-          localStorage.setItem('token', result.token);
+          // Store user data in localStorage
           localStorage.setItem('user', JSON.stringify(result.user));
+          
+          // Update app context
           login(result.user);
           
-          toast.success('Login successful!');
+          toast.success(result.message || 'Login successful!');
           
+          // Get the redirect URL from query params
+          const params = new URLSearchParams(window.location.search);
+          const from = params.get('from');
+          
+          // Role-based redirection
           if (result.user.role === 'admin') {
-            router.push('/admin');
+            router.push(from || '/admin');
           } else {
-            router.push('/products');
+            router.push(from || '/products');
           }
         } else {
           setError(result.message || 'Login failed');
           toast.error(result.message || 'Login failed');
         }
+      } else {
+        // Handle registration
+        const response = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(data),
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+          toast.success('Registration successful! Please login.');
+          setIsLogin(true);
+          reset();
+        } else {
+          setError(result.message || 'Registration failed');
+          toast.error(result.message || 'Registration failed');
+        }
       }
     } catch (error) {
-      console.error('Login error:', error);
-      setError('An error occurred during login');
-      toast.error('An error occurred during login');
+      console.error('Auth error:', error);
+      setError('An error occurred. Please try again.');
+      toast.error('An error occurred. Please try again.');
     }
   };
 
@@ -75,11 +103,46 @@ export default function LoginPage() {
         <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
           {isLogin ? 'Sign in to your account' : 'Create new account'}
         </h2>
+        <p className="mt-2 text-center text-sm text-gray-600">
+          {isLogin ? "Don't have an account? " : "Already have an account? "}
+          <button
+            onClick={() => {
+              setIsLogin(!isLogin);
+              setError('');
+              reset();
+            }}
+            className="font-medium text-yellow-600 hover:text-yellow-500"
+          >
+            {isLogin ? 'Sign up' : 'Sign in'}
+          </button>
+        </p>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
           <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
+            {!isLogin && (
+              <div>
+                <label htmlFor="name" className="block text-sm font-medium text-gray-700">
+                  Full Name
+                </label>
+                <div className="mt-1 relative rounded-md shadow-sm">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <User className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <input
+                    {...register('name', { required: !isLogin && 'Name is required' })}
+                    type="text"
+                    className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-yellow-500 focus:border-yellow-500 sm:text-sm"
+                    placeholder="John Doe"
+                  />
+                </div>
+                {errors.name && (
+                  <p className="mt-2 text-sm text-red-600">{errors.name.message as string}</p>
+                )}
+              </div>
+            )}
+
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700">
                 Email address
@@ -115,7 +178,13 @@ export default function LoginPage() {
                   <Lock className="h-5 w-5 text-gray-400" />
                 </div>
                 <input
-                  {...register('password', { required: 'Password is required' })}
+                  {...register('password', { 
+                    required: 'Password is required',
+                    minLength: {
+                      value: 6,
+                      message: 'Password must be at least 6 characters'
+                    }
+                  })}
                   type={showPassword ? 'text' : 'password'}
                   className="block w-full pl-10 pr-10 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-yellow-500 focus:border-yellow-500 sm:text-sm"
                   placeholder="••••••••"

@@ -30,7 +30,7 @@ const ProgressSection: React.FC = () => {
   ];
 
   return (
-    <div className="w-4/5 md:w-1/2 mx-auto p-6 md:p-10">
+    <div className="w-[98%] md:w-2/3 mx-auto p-6 md:p-10">
       <div className="p-6 md:p-10 bg-white">
       <h1 className="text-2xl md:text-3xl font-bold text-center text-green-800 mb-8">
         What makes our A2 Gir Cow Ghee Special?
