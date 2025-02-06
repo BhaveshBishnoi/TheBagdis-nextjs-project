@@ -90,10 +90,8 @@ export default function LoginPage() {
         // Store token in localStorage
         localStorage.setItem('token', result.token);
         
-        // Update app context
-        login(result.user);
-        
-        toast.success(result.message || 'Login successful!');
+        // Update app context with user data
+        await login(result.user);
         
         // Get the redirect URL from query params
         const from = searchParams.get('from');
@@ -135,6 +133,10 @@ export default function LoginPage() {
     } catch (error: any) {
       console.error('Auth error:', error);
       toast.error(error.message || 'Something went wrong');
+      
+      // Clear any invalid session data
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
     } finally {
       setLoading(false);
     }

@@ -209,27 +209,32 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const login = async (userData: User) => {
     try {
-      // Store user data in localStorage
-      localStorage.setItem('user', JSON.stringify(userData));
       dispatch({ type: 'SET_USER', payload: userData });
+      toast.success('Login successful!');
     } catch (error) {
       console.error('Error during login:', error);
       toast.error('Login failed. Please try again.');
+      throw error; // Re-throw to handle in the login component
     }
   };
 
   const logout = async () => {
     try {
-      // Clear local storage
-      localStorage.removeItem('user');
-      localStorage.removeItem('token');
-      
-      // Clear server-side session
-      await fetch('/api/auth/logout', {
+      // Clear server-side session first
+      const response = await fetch('/api/auth/logout', {
         method: 'POST',
         credentials: 'include'
       });
+
+      if (!response.ok) {
+        throw new Error('Logout failed');
+      }
+
+      // Clear local storage
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
       
+      // Clear app state
       dispatch({ type: 'CLEAR_USER' });
       dispatch({ type: 'CLEAR_CART' });
       
@@ -237,6 +242,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error('Error during logout:', error);
       toast.error('Logout failed. Please try again.');
+      throw error; // Re-throw to handle in the component
     }
   };
 

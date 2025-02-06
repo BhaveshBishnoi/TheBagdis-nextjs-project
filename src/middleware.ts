@@ -55,38 +55,58 @@ export async function middleware(request: NextRequest) {
     } else {
       // Verify token
       const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'your-secret-key');
-      const { payload } = await jwtVerify(token, secret);
+      
+      try {
+        const { payload } = await jwtVerify(token, secret) as { payload: JWTPayload };
 
-      // If authenticated user tries to access auth paths
-      if (isAuthPath) {
-        return NextResponse.redirect(new URL('/', request.url));
+        // Allow access to auth paths even when authenticated
+        if (isAuthPath) {
+          return NextResponse.next();
+        }
+
+        // If authenticated user tries to access auth paths
+        if (isAuthPath) {
+          // Redirect to appropriate dashboard based on role
+          if (payload.role === 'admin') {
+            return NextResponse.redirect(new URL('/admin', request.url));
+          } else {
+            return NextResponse.redirect(new URL('/products', request.url));
+          }
+        }
+
+        // Check admin access
+        if (isAdminPath && payload.role !== 'admin') {
+          return NextResponse.redirect(new URL('/products', request.url));
+        }
+
+        // Add user info to headers for the API routes
+        const requestHeaders = new Headers(request.headers);
+        requestHeaders.set('x-user-id', payload.userId);
+        requestHeaders.set('x-user-role', payload.role || 'user');
+
+        return NextResponse.next({
+          headers: requestHeaders,
+        });
+      } catch (jwtError) {
+        // Token is invalid, clear it
+        const response = NextResponse.next();
+        response.cookies.delete('token');
+        
+        // Only redirect to login if trying to access protected routes
+        if (isProtectedPath || isAdminPath) {
+          const url = new URL('/login', request.url);
+          url.searchParams.set('from', pathname);
+          return NextResponse.redirect(url);
+        }
+        
+        return response;
       }
-
-      // Check admin access
-      if (isAdminPath && payload.role !== 'admin') {
-        return NextResponse.redirect(new URL('/', request.url));
-      }
-
-      // Add user info to headers for the API routes
-      const requestHeaders = new Headers(request.headers);
-      requestHeaders.set('x-user-id', payload.userId as string);
-      requestHeaders.set('x-user-role', payload.role as string);
-
-      return NextResponse.next({
-        headers: requestHeaders,
-      });
     }
 
     // Allow access to public routes
     return NextResponse.next();
   } catch (error) {
-    // If token is invalid, clear it and redirect to login
-    if (isProtectedPath || isAdminPath) {
-      const response = NextResponse.redirect(new URL('/login', request.url));
-      response.cookies.delete('token');
-      return response;
-    }
-
+    console.error('Middleware error:', error);
     return NextResponse.next();
   }
 }

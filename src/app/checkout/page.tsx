@@ -74,6 +74,18 @@ export default function CheckoutPage() {
     }
   }, [user, cart, router]);
 
+  useEffect(() => {
+    // Add Razorpay script
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.async = true;
+    document.body.appendChild(script);
+
+    return () => {
+      document.body.removeChild(script);
+    };
+  }, []);
+
   const handleAddressSelect = (value: string) => {
     setSelectedAddress(value);
     if (value === 'new') {
@@ -110,16 +122,23 @@ export default function CheckoutPage() {
       // Format the address string
       const fullAddress = `${formData.street}, ${formData.city}, ${formData.state} - ${formData.pinCode}`;
 
+      // Calculate total amount including tax
+      const subtotal = cart.reduce((total, item) => total + (item.price * item.quantity), 0);
+      const tax = subtotal * 0.18;
+      const totalAmount = subtotal + tax;
+
       // Create order payload
       const orderData = {
         items: cart,
         address: fullAddress,
         phone: formData.phone,
         paymentMethod: formData.paymentMethod,
-        saveAddress: formData.saveAddress
+        saveAddress: formData.saveAddress,
+        amount: totalAmount,
+        status: formData.paymentMethod === 'cod' ? 'pending' : 'awaiting_payment'
       };
 
-      // If it's a card or UPI payment, initiate payment first
+      // If it's a card or UPI payment, initiate Razorpay
       if (formData.paymentMethod !== 'cod') {
         const paymentResponse = await fetch('/api/payment/create', {
           method: 'POST',
@@ -127,26 +146,75 @@ export default function CheckoutPage() {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            amount: cart.reduce((total, item) => total + (item.price * item.quantity), 0),
+            amount: totalAmount,
             currency: 'INR',
             paymentMethod: formData.paymentMethod
           }),
+          credentials: 'include',
         });
 
         if (!paymentResponse.ok) {
           throw new Error('Payment initialization failed');
         }
 
-        const { paymentId, paymentLink } = await paymentResponse.json();
+        const paymentData = await paymentResponse.json();
         
-        // Store order data in session storage before redirecting
-        sessionStorage.setItem('pendingOrder', JSON.stringify({
-          ...orderData,
-          paymentId
-        }));
+        // Store order data in session storage
+        sessionStorage.setItem('pendingOrder', JSON.stringify(orderData));
 
-        // Redirect to payment page
-        window.location.href = paymentLink;
+        // Initialize Razorpay
+        const options = {
+          key: paymentData.key,
+          amount: paymentData.amount * 100,
+          currency: paymentData.currency,
+          name: 'The Bagdis',
+          description: 'Order Payment',
+          order_id: paymentData.orderId,
+          prefill: paymentData.prefill,
+          handler: async function(response: any) {
+            try {
+              // Create order with payment details
+              const orderResponse = await fetch('/api/orders', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  ...orderData,
+                  paymentId: response.razorpay_payment_id,
+                  orderId: response.razorpay_order_id,
+                  signature: response.razorpay_signature
+                }),
+                credentials: 'include',
+              });
+
+              if (!orderResponse.ok) {
+                throw new Error('Failed to create order');
+              }
+
+              const order = await orderResponse.json();
+              
+              // Clear cart and session storage
+              clearCart();
+              sessionStorage.removeItem('pendingOrder');
+              
+              // Redirect to success page
+              router.push(`/order-success?orderId=${order._id}`);
+            } catch (error) {
+              console.error('Order creation error:', error);
+              toast.error('Failed to complete order');
+            }
+          },
+          modal: {
+            ondismiss: function() {
+              setLoading(false);
+              toast.error('Payment cancelled');
+            }
+          }
+        };
+
+        const rzp = new (window as any).Razorpay(options);
+        rzp.open();
         return;
       }
 
@@ -157,9 +225,12 @@ export default function CheckoutPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(orderData),
+        credentials: 'include',
       });
 
-      if (!response.ok) throw new Error('Failed to create order');
+      if (!response.ok) {
+        throw new Error('Failed to create order');
+      }
 
       const order = await response.json();
       

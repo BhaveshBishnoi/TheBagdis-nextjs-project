@@ -29,21 +29,20 @@ export default function Navbar() {
     setIsProfileOpen(!isProfileOpen);
   };
 
-  const handleLogin = async () => {
-    try {
-      router.push('/login');
-    } catch (error) {
-      console.error('Navigation error:', error);
-    }
+  const handleLogin = () => {
+    setIsMenuOpen(false);
+    router.push('/login');
   };
 
   const handleLogout = async () => {
     try {
-      await logout();
       setIsProfileOpen(false);
+      setIsMenuOpen(false);
+      await logout();
       router.push('/');
     } catch (error) {
       console.error('Logout error:', error);
+      // Error is already handled by AppContext
     }
   };
 
@@ -92,7 +91,7 @@ export default function Navbar() {
               {/* Admin Panel Link for Admin Users */}
               {user?.role === 'admin' && (
                 <Link
-                  href="/admin/dashboard"
+                  href="/admin"
                   className="px-3 py-2 rounded-md text-sm font-medium text-gray-900 hover:text-yellow-600 hover:bg-yellow-50 transition duration-150 flex items-center"
                 >
                   <ChartBarIcon className="h-5 w-5 mr-1" />
@@ -225,7 +224,7 @@ export default function Navbar() {
               <div className="border-t border-gray-100 pt-2">
                 <div className="px-3 py-2 text-sm font-medium text-gray-500">Admin Panel</div>
                 <Link
-                  href="/admin/dashboard"
+                  href="/admin"
                   className="block px-3 py-2 rounded-md text-base font-medium text-gray-900 hover:text-yellow-600 hover:bg-yellow-50"
                   onClick={() => setIsMenuOpen(false)}
                 >

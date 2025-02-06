@@ -1,20 +1,29 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 import Order from '@/models/Order';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { Auth } from '@/lib/auth';
+import { headers } from 'next/headers';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session?.user) {
+    const headersList = headers();
+    const token = headersList.get('cookie')?.split(';')
+      .find(c => c.trim().startsWith('token='))
+      ?.split('=')[1];
+
+    if (!token) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Get user from token
+    const user = await Auth.getCurrentUser(token);
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     await connectToDatabase();
     
-    const orders = await Order.find({ userId: session.user.id })
+    const orders = await Order.find({ userId: user.id })
       .sort({ createdAt: -1 })
       .exec();
 
@@ -30,9 +39,18 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session?.user) {
+    const headersList = headers();
+    const token = headersList.get('cookie')?.split(';')
+      .find(c => c.trim().startsWith('token='))
+      ?.split('=')[1];
+
+    if (!token) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Get user from token
+    const user = await Auth.getCurrentUser(token);
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -41,7 +59,7 @@ export async function POST(request: Request) {
 
     const order = await Order.create({
       ...orderData,
-      userId: session.user.id
+      userId: user.id
     });
 
     return NextResponse.json(order, { status: 201 });

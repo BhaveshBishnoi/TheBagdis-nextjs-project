@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/authOptions';
+import { Auth } from '@/lib/auth';
 import Razorpay from 'razorpay';
 
 const razorpay = new Razorpay({
@@ -10,8 +9,15 @@ const razorpay = new Razorpay({
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session) {
+    // Get token from cookie
+    const token = req.cookies.get('token')?.value;
+    if (!token) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Verify user
+    const user = await Auth.getCurrentUser(token);
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -22,11 +28,21 @@ export async function POST(req: NextRequest) {
       amount: Math.round(amount * 100), // Convert to paise
       currency: currency || 'INR',
       payment_capture: 1,
+      notes: {
+        userId: user.id, // Add user ID to order notes for verification
+      }
     });
 
     return NextResponse.json({
-      paymentId: order.id,
-      paymentLink: `${process.env.NEXT_PUBLIC_APP_URL}/payment?order_id=${order.id}&amount=${amount}&currency=${currency}`,
+      orderId: order.id,
+      amount: amount,
+      currency: currency || 'INR',
+      key: process.env.RAZORPAY_KEY_ID,
+      prefill: {
+        name: user.name,
+        email: user.email,
+        contact: user.phone || ''
+      }
     });
   } catch (error) {
     console.error('Payment creation error:', error);
