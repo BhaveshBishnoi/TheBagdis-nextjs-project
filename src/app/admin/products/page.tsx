@@ -20,6 +20,8 @@ interface ProductFormData {
   stock: number;
   images: string[];
   featured: boolean;
+  weight: number;
+  weightUnit: 'g' | 'kg' | 'ml' | 'l';
 }
 
 const initialFormData: ProductFormData = {
@@ -30,6 +32,8 @@ const initialFormData: ProductFormData = {
   stock: 0,
   images: [],
   featured: false,
+  weight: 0,
+  weightUnit: 'g'
 };
 
 export default function ProductsManagement() {
@@ -58,6 +62,8 @@ export default function ProductsManagement() {
         stock: editingProduct.stock,
         images: editingProduct.images,
         featured: editingProduct.featured,
+        weight: editingProduct.weight,
+        weightUnit: editingProduct.weightUnit
       });
       setImageUrls(editingProduct.images);
     } else {
@@ -153,11 +159,16 @@ export default function ProductsManagement() {
   };
 
   const onSubmit = async (data: ProductFormData) => {
+    if (imageUrls.length === 0) {
+      toast.error('Please add at least one product image');
+      return;
+    }
+
     try {
-      if (data.images.length === 0) {
-        toast.error('Please upload at least one image');
-        return;
-      }
+      const productData = {
+        ...data,
+        images: imageUrls,
+      };
 
       const url = editingProduct 
         ? `/api/products/${editingProduct.id}`
@@ -170,22 +181,21 @@ export default function ProductsManagement() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify(productData),
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to save product');
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to save product');
       }
 
-      toast.success(editingProduct ? 'Product updated successfully' : 'Product added successfully');
+      toast.success(editingProduct ? 'Product updated successfully' : 'Product created successfully');
       setShowForm(false);
       setEditingProduct(null);
-      reset(initialFormData);
       fetchProducts();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Error saving product');
       console.error('Error:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to save product');
     }
   };
 
@@ -311,81 +321,99 @@ export default function ProductsManagement() {
                 {editingProduct ? 'Edit Product' : 'Add New Product'}
               </h3>
               
-              <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+              <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Name</label>
                   <input
-                    {...register("name", { 
-                      required: "Name is required",
-                      minLength: { value: 3, message: "Name must be at least 3 characters" }
-                    })}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-yellow-500 focus:border-yellow-500"
+                    type="text"
+                    {...register('name', { required: 'Name is required' })}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-yellow-500 focus:ring-yellow-500"
                   />
-                  {errors.name && (
-                    <p className="mt-1 text-sm text-red-600">{errors.name.message}</p>
-                  )}
+                  {errors.name && <p className="mt-1 text-sm text-red-600">{errors.name.message}</p>}
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Description</label>
                   <textarea
-                    {...register("description", { 
-                      required: "Description is required",
-                      minLength: { value: 10, message: "Description must be at least 10 characters" }
-                    })}
+                    {...register('description', { required: 'Description is required' })}
                     rows={3}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-yellow-500 focus:border-yellow-500"
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-yellow-500 focus:ring-yellow-500"
                   />
-                  {errors.description && (
-                    <p className="mt-1 text-sm text-red-600">{errors.description.message}</p>
-                  )}
+                  {errors.description && <p className="mt-1 text-sm text-red-600">{errors.description.message}</p>}
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Price</label>
+                    <label className="block text-sm font-medium text-gray-700">Price (₹)</label>
                     <input
                       type="number"
-                      {...register("price", { 
-                        required: "Price is required",
-                        min: { value: 0, message: "Price must be greater than 0" }
-                      })}
-                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-yellow-500 focus:border-yellow-500"
                       step="0.01"
+                      {...register('price', { 
+                        required: 'Price is required',
+                        min: { value: 0, message: 'Price must be positive' }
+                      })}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-yellow-500 focus:ring-yellow-500"
                     />
-                    {errors.price && (
-                      <p className="mt-1 text-sm text-red-600">{errors.price.message}</p>
-                    )}
+                    {errors.price && <p className="mt-1 text-sm text-red-600">{errors.price.message}</p>}
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Stock</label>
                     <input
                       type="number"
-                      {...register("stock", { 
-                        required: "Stock is required",
-                        min: { value: 0, message: "Stock cannot be negative" }
+                      {...register('stock', { 
+                        required: 'Stock is required',
+                        min: { value: 0, message: 'Stock must be positive' }
                       })}
-                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-yellow-500 focus:border-yellow-500"
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-yellow-500 focus:ring-yellow-500"
                     />
-                    {errors.stock && (
-                      <p className="mt-1 text-sm text-red-600">{errors.stock.message}</p>
-                    )}
+                    {errors.stock && <p className="mt-1 text-sm text-red-600">{errors.stock.message}</p>}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Weight</label>
+                    <input
+                      type="number"
+                      {...register('weight', { 
+                        required: 'Weight is required',
+                        min: { value: 0, message: 'Weight must be positive' }
+                      })}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-yellow-500 focus:ring-yellow-500"
+                    />
+                    {errors.weight && <p className="mt-1 text-sm text-red-600">{errors.weight.message}</p>}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Weight Unit</label>
+                    <select
+                      {...register('weightUnit', { required: 'Weight unit is required' })}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-yellow-500 focus:ring-yellow-500"
+                    >
+                      <option value="g">Grams (g)</option>
+                      <option value="kg">Kilograms (kg)</option>
+                      <option value="ml">Milliliters (ml)</option>
+                      <option value="l">Liters (l)</option>
+                    </select>
+                    {errors.weightUnit && <p className="mt-1 text-sm text-red-600">{errors.weightUnit.message}</p>}
                   </div>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Category</label>
-                  <input
-                    {...register("category", { 
-                      required: "Category is required",
-                      minLength: { value: 2, message: "Category must be at least 2 characters" }
-                    })}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-yellow-500 focus:border-yellow-500"
-                  />
-                  {errors.category && (
-                    <p className="mt-1 text-sm text-red-600">{errors.category.message}</p>
-                  )}
+                  <select
+                    {...register('category', { required: 'Category is required' })}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-yellow-500 focus:ring-yellow-500"
+                  >
+                    <option value="">Select a category</option>
+                    <option value="ghee">Ghee</option>
+                    <option value="honey">Honey</option>
+                    <option value="spices">Spices</option>
+                    <option value="oils">Oils</option>
+                    <option value="other">Other</option>
+                  </select>
+                  {errors.category && <p className="mt-1 text-sm text-red-600">{errors.category.message}</p>}
                 </div>
 
                 <div>
@@ -415,9 +443,7 @@ export default function ProductsManagement() {
                       </p>
                     </div>
                   </div>
-                  {errors.images && (
-                    <p className="mt-1 text-sm text-red-600">{errors.images.message}</p>
-                  )}
+                  {errors.images && <p className="mt-1 text-sm text-red-600">{errors.images.message}</p>}
                 </div>
 
                 {/* Image Preview */}

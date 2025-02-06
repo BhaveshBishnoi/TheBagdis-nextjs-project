@@ -8,7 +8,6 @@ import {
   ShoppingBagIcon,
   Bars3Icon,
   XMarkIcon,
-  UserIcon,
   ChartBarIcon,
   UsersIcon,
   DocumentTextIcon,
@@ -20,32 +19,32 @@ export default function Navbar() {
   const { user, cart, logout } = useApp();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [isAdminMenuOpen, setIsAdminMenuOpen] = useState(false);
 
   const toggleMenu = () => {
     setIsMenuOpen(!isMenuOpen);
     if (isProfileOpen) setIsProfileOpen(false);
-    if (isAdminMenuOpen) setIsAdminMenuOpen(false);
   };
 
   const toggleProfile = () => {
     setIsProfileOpen(!isProfileOpen);
-    if (isAdminMenuOpen) setIsAdminMenuOpen(false);
   };
 
-  const toggleAdminMenu = () => {
-    setIsAdminMenuOpen(!isAdminMenuOpen);
-    if (isProfileOpen) setIsProfileOpen(false);
+  const handleLogin = async () => {
+    try {
+      router.push('/login');
+    } catch (error) {
+      console.error('Navigation error:', error);
+    }
   };
 
-  const handleLogin = () => {
-    router.push('/login');
-  };
-
-  const handleLogout = () => {
-    logout();
-    setIsProfileOpen(false);
-    setIsAdminMenuOpen(false);
+  const handleLogout = async () => {
+    try {
+      await logout();
+      setIsProfileOpen(false);
+      router.push('/');
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
   };
 
   return (
@@ -92,55 +91,13 @@ export default function Navbar() {
               
               {/* Admin Panel Link for Admin Users */}
               {user?.role === 'admin' && (
-                <div className="relative">
-                  <button
-                    onClick={toggleAdminMenu}
-                    className="px-3 py-2 rounded-md text-sm font-medium text-gray-900 hover:text-yellow-600 hover:bg-yellow-50 transition duration-150 flex items-center"
-                  >
-                    <ChartBarIcon className="h-5 w-5 mr-1" />
-                    Admin Panel
-                  </button>
-                  
-                  {/* Admin Dropdown Menu */}
-                  {isAdminMenuOpen && (
-                    <div className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50">
-                      <div className="py-1">
-                        <Link
-                          href="/admin/dashboard"
-                          className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-yellow-50 hover:text-yellow-600"
-                          onClick={() => setIsAdminMenuOpen(false)}
-                        >
-                          <ChartBarIcon className="h-5 w-5 mr-2" />
-                          Dashboard
-                        </Link>
-                        <Link
-                          href="/admin/products"
-                          className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-yellow-50 hover:text-yellow-600"
-                          onClick={() => setIsAdminMenuOpen(false)}
-                        >
-                          <Cog6ToothIcon className="h-5 w-5 mr-2" />
-                          Products
-                        </Link>
-                        <Link
-                          href="/admin/users"
-                          className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-yellow-50 hover:text-yellow-600"
-                          onClick={() => setIsAdminMenuOpen(false)}
-                        >
-                          <UsersIcon className="h-5 w-5 mr-2" />
-                          Users
-                        </Link>
-                        <Link
-                          href="/admin/blogs"
-                          className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-yellow-50 hover:text-yellow-600"
-                          onClick={() => setIsAdminMenuOpen(false)}
-                        >
-                          <DocumentTextIcon className="h-5 w-5 mr-2" />
-                          Blogs
-                        </Link>
-                      </div>
-                    </div>
-                  )}
-                </div>
+                <Link
+                  href="/admin/dashboard"
+                  className="px-3 py-2 rounded-md text-sm font-medium text-gray-900 hover:text-yellow-600 hover:bg-yellow-50 transition duration-150 flex items-center"
+                >
+                  <ChartBarIcon className="h-5 w-5 mr-1" />
+                  Admin Panel
+                </Link>
               )}
             </div>
           </div>

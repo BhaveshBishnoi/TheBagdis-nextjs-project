@@ -1,6 +1,19 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 
+const addressSchema = new mongoose.Schema({
+  name: String,
+  phone: String,
+  street: String,
+  city: String,
+  state: String,
+  pinCode: String,
+  isDefault: {
+    type: Boolean,
+    default: false
+  }
+}, { _id: false });
+
 const userSchema = new mongoose.Schema({
   name: {
     type: String,
@@ -31,14 +44,23 @@ const userSchema = new mongoose.Schema({
     enum: ['user', 'admin'],
     default: 'user',
   },
-  addresses: [{
-    street: String,
-    city: String,
-    state: String,
-    postalCode: String,
-    country: String,
-    isDefault: Boolean,
-  }],
+  phone: {
+    type: String,
+    validate: {
+      validator: function(v: string) {
+        return /^[0-9]{10}$/.test(v);
+      },
+      message: 'Please provide a valid 10-digit phone number'
+    }
+  },
+  address: {
+    type: String,
+    trim: true
+  },
+  addresses: {
+    type: [addressSchema],
+    default: []
+  },
   orders: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Order',

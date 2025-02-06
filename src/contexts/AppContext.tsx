@@ -20,22 +20,24 @@ interface AppContextType extends AppState {
   updateQuantity: (productId: string, quantity: number) => void;
   clearCart: () => void;
   toggleCart: () => void;
+  setUser: (user: User | null) => void;
 }
 
 type Action =
-  | { type: 'SET_USER'; payload: User }
+  | { type: 'SET_USER'; payload: User | null }
   | { type: 'CLEAR_USER' }
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'ADD_TO_CART'; payload: CartItem }
   | { type: 'REMOVE_FROM_CART'; payload: string }
   | { type: 'UPDATE_QUANTITY'; payload: { productId: string; quantity: number } }
   | { type: 'CLEAR_CART' }
+  | { type: 'SET_CART'; payload: CartItem[] }
   | { type: 'TOGGLE_CART' };
 
 const initialState: AppState = {
   user: null,
   cart: [],
-  isLoading: false,
+  isLoading: true, // Start with loading true
   isAuthenticated: false,
   cartOpen: false,
 };
@@ -46,7 +48,7 @@ function appReducer(state: AppState, action: Action): AppState {
       return {
         ...state,
         user: action.payload,
-        isAuthenticated: true,
+        isAuthenticated: !!action.payload,
         isLoading: false,
       };
     case 'CLEAR_USER':
@@ -54,11 +56,17 @@ function appReducer(state: AppState, action: Action): AppState {
         ...state,
         user: null,
         isAuthenticated: false,
+        cart: [], // Clear cart on logout
       };
     case 'SET_LOADING':
       return {
         ...state,
         isLoading: action.payload,
+      };
+    case 'SET_CART':
+      return {
+        ...state,
+        cart: action.payload,
       };
     case 'ADD_TO_CART': {
       try {
@@ -68,24 +76,21 @@ function appReducer(state: AppState, action: Action): AppState {
 
         let updatedCart;
         if (existingItemIndex > -1) {
-          // Item exists, update quantity
           updatedCart = [...state.cart];
           updatedCart[existingItemIndex] = {
             ...updatedCart[existingItemIndex],
             quantity: updatedCart[existingItemIndex].quantity + 1
           };
         } else {
-          // Item doesn't exist, add new item
           updatedCart = [...state.cart, { ...action.payload, quantity: 1 }];
         }
         
-        // Save to localStorage
         localStorage.setItem('cart', JSON.stringify(updatedCart));
         
         return {
           ...state,
           cart: updatedCart,
-          cartOpen: true, // Open cart when adding item
+          cartOpen: true,
         };
       } catch (error) {
         console.error('Error adding to cart:', error);
@@ -98,10 +103,7 @@ function appReducer(state: AppState, action: Action): AppState {
         const updatedCart = state.cart.filter(
           item => item.productId !== action.payload
         );
-        
-        // Save to localStorage
         localStorage.setItem('cart', JSON.stringify(updatedCart));
-        
         return {
           ...state,
           cart: updatedCart,
@@ -119,35 +121,30 @@ function appReducer(state: AppState, action: Action): AppState {
             ? { ...item, quantity: action.payload.quantity }
             : item
         );
-        
-        // Save to localStorage
         localStorage.setItem('cart', JSON.stringify(updatedCart));
-        
         return {
           ...state,
           cart: updatedCart,
         };
       } catch (error) {
-        console.error('Error updating quantity:', error);
-        toast.error('Failed to update quantity');
+        console.error('Error updating cart:', error);
+        toast.error('Failed to update cart');
         return state;
       }
     }
-    case 'CLEAR_CART':
+    case 'CLEAR_CART': {
       try {
-        // Clear cart from localStorage
         localStorage.removeItem('cart');
-        
         return {
           ...state,
           cart: [],
-          cartOpen: false,
         };
       } catch (error) {
         console.error('Error clearing cart:', error);
         toast.error('Failed to clear cart');
         return state;
       }
+    }
     case 'TOGGLE_CART':
       return {
         ...state,
@@ -163,146 +160,153 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(appReducer, initialState);
 
-  // Check for existing session and cart data on mount
+  // Load cart from localStorage on mount
   useEffect(() => {
-    const checkAuth = async () => {
+    const loadInitialData = async () => {
       try {
-        // Try to get user data from localStorage
-        const storedUser = localStorage.getItem('user');
-        if (storedUser) {
-          const userData = JSON.parse(storedUser);
-          
-          // Verify the session is still valid
-          const response = await fetch('/api/auth/verify', {
-            credentials: 'include'
-          });
-          
-          if (response.ok) {
-            dispatch({ type: 'SET_USER', payload: userData });
-          } else {
-            // If session is invalid, clear local storage
-            localStorage.removeItem('user');
-          }
+        // Load cart
+        const savedCart = localStorage.getItem('cart');
+        if (savedCart) {
+          dispatch({ type: 'SET_CART', payload: JSON.parse(savedCart) });
         }
 
-        // Load cart data from localStorage
-        const storedCart = localStorage.getItem('cart');
-        if (storedCart) {
-          try {
-            const cartData = JSON.parse(storedCart);
-            cartData.forEach((item: CartItem) => {
-              dispatch({ type: 'ADD_TO_CART', payload: item });
-            });
-          } catch (error) {
-            console.error('Error loading cart data:', error);
-            localStorage.removeItem('cart');
-            toast.error('Failed to load cart data');
-          }
+        // Check session
+        const token = localStorage.getItem('token');
+        if (!token) {
+          dispatch({ type: 'SET_LOADING', payload: false });
+          return;
         }
+
+        const response = await fetch('/api/auth/session', {
+          headers: {
+            'Cookie': `token=${token}`
+          }
+        });
+        
+        if (!response.ok) {
+          // Clear invalid session
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          dispatch({ type: 'CLEAR_USER' });
+          dispatch({ type: 'SET_LOADING', payload: false });
+          return;
+        }
+
+        const { user } = await response.json();
+        if (user) {
+          dispatch({ type: 'SET_USER', payload: user });
+        }
+        
+        dispatch({ type: 'SET_LOADING', payload: false });
       } catch (error) {
-        console.error('Auth check error:', error);
-        localStorage.removeItem('user');
-        toast.error('Authentication error');
+        console.error('Error loading initial data:', error);
+        dispatch({ type: 'SET_LOADING', payload: false });
       }
     };
 
-    checkAuth();
+    loadInitialData();
   }, []);
 
-  const login = (userData: User) => {
+  const login = async (userData: User) => {
     try {
-      // Ensure role is included in userData
-      if (!userData.role) {
-        throw new Error('User role not provided');
-      }
+      // Store user data in localStorage
+      localStorage.setItem('user', JSON.stringify(userData));
       dispatch({ type: 'SET_USER', payload: userData });
     } catch (error) {
-      console.error('Login error:', error);
-      toast.error('Failed to log in');
+      console.error('Error during login:', error);
+      toast.error('Login failed. Please try again.');
     }
   };
 
   const logout = async () => {
     try {
-      // Call logout API to clear the auth cookie
+      // Clear local storage
+      localStorage.removeItem('user');
+      localStorage.removeItem('token');
+      
+      // Clear server-side session
       await fetch('/api/auth/logout', {
         method: 'POST',
         credentials: 'include'
       });
       
-      // Clear local storage
-      localStorage.removeItem('user');
-      localStorage.removeItem('cart');
-      
-      // Clear app state
       dispatch({ type: 'CLEAR_USER' });
       dispatch({ type: 'CLEAR_CART' });
       
       toast.success('Logged out successfully');
     } catch (error) {
-      console.error('Logout error:', error);
-      toast.error('Failed to log out');
+      console.error('Error during logout:', error);
+      toast.error('Logout failed. Please try again.');
     }
+  };
+
+  const setUser = (user: User | null) => {
+    dispatch({ type: 'SET_USER', payload: user });
   };
 
   const addToCart = (item: CartItem) => {
-    try {
-      dispatch({ type: 'ADD_TO_CART', payload: item });
-      toast.success('Added to cart');
-    } catch (error) {
-      console.error('Add to cart error:', error);
-      toast.error('Failed to add to cart');
-    }
+    dispatch({ type: 'ADD_TO_CART', payload: item });
   };
 
   const removeFromCart = (productId: string) => {
-    try {
-      dispatch({ type: 'REMOVE_FROM_CART', payload: productId });
-      toast.success('Removed from cart');
-    } catch (error) {
-      console.error('Remove from cart error:', error);
-      toast.error('Failed to remove from cart');
-    }
+    dispatch({ type: 'REMOVE_FROM_CART', payload: productId });
   };
 
   const updateQuantity = (productId: string, quantity: number) => {
-    try {
-      dispatch({
-        type: 'UPDATE_QUANTITY',
-        payload: { productId, quantity },
-      });
-    } catch (error) {
-      console.error('Update quantity error:', error);
-      toast.error('Failed to update quantity');
-    }
+    dispatch({ type: 'UPDATE_QUANTITY', payload: { productId, quantity } });
   };
 
   const clearCart = () => {
-    try {
-      dispatch({ type: 'CLEAR_CART' });
-      toast.success('Cart cleared');
-    } catch (error) {
-      console.error('Clear cart error:', error);
-      toast.error('Failed to clear cart');
-    }
+    dispatch({ type: 'CLEAR_CART' });
   };
 
   const toggleCart = () => {
     dispatch({ type: 'TOGGLE_CART' });
   };
 
-  const value = {
-    ...state,
-    login,
-    logout,
-    addToCart,
-    removeFromCart,
-    updateQuantity,
-    clearCart,
-    toggleCart,
-  };
+  // Add session check interval
+  useEffect(() => {
+    const checkSession = async () => {
+      try {
+        const response = await fetch('/api/auth/verify', {
+          credentials: 'include'
+        });
+        
+        if (!response.ok) {
+          // Session is invalid, logout user
+          logout();
+        }
+      } catch (error) {
+        console.error('Session check failed:', error);
+      }
+    };
 
-  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
+    // Check session every 5 minutes
+    const interval = setInterval(checkSession, 5 * 60 * 1000);
+    
+    // Initial check
+    checkSession();
+
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <AppContext.Provider
+      value={{
+        ...state,
+        login,
+        logout,
+        setUser,
+        addToCart,
+        removeFromCart,
+        updateQuantity,
+        clearCart,
+        toggleCart,
+      }}
+    >
+      {children}
+    </AppContext.Provider>
+  );
 }
 
 export function useApp() {

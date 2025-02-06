@@ -37,6 +37,18 @@ export default function UserMenu() {
     );
   }
 
+  // For admin users, just show a logout button
+  if (user.role === 'admin') {
+    return (
+      <button
+        onClick={handleLogout}
+        className="flex items-center text-gray-700 hover:text-yellow-500"
+      >
+        <UserIcon className="h-6 w-6" />
+      </button>
+    );
+  }
+
   return (
     <div className="relative" ref={menuRef}>
       <button
@@ -76,9 +88,9 @@ export default function UserMenu() {
           >
             <div className="flex justify-between items-center">
               <span>Cart</span>
-              {cart.length > 0 && (
+              {cart && cart.reduce((total: number, item) => total + (item?.quantity || 0), 0) > 0 && (
                 <span className="bg-yellow-500 text-white px-2 py-1 rounded-full text-xs">
-                  {cart.length}
+                  {cart.reduce((total: number, item) => total + (item?.quantity || 0), 0)}
                 </span>
               )}
             </div>

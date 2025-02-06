@@ -6,7 +6,7 @@ export async function GET(request: Request) {
     // Get the token from cookies
     const cookieHeader = request.headers.get('cookie');
     const token = cookieHeader?.split(';')
-      .find(c => c.trim().startsWith('auth_token='))
+      .find(c => c.trim().startsWith('token='))
       ?.split('=')[1];
 
     if (!token) {

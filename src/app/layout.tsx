@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { AppProvider } from "@/contexts/AppContext";
 import { CartProvider } from "@/contexts/CartContext";
-import Footer from "@/components/Footer";
 import Navbar from "@/components/Navbar";
 import { Toaster } from "react-hot-toast";
+import FooterWrapper from "@/components/FooterWrapper";
 
 export const metadata: Metadata = {
   title: "The Bagdi's",
@@ -25,7 +25,7 @@ export default function RootLayout({
             <main className="flex-grow pt-16">
               {children}
             </main>
-            <Footer />
+            <FooterWrapper />
             <Toaster />
           </CartProvider>
         </AppProvider>
